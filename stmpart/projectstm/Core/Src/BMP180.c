@@ -56,41 +56,47 @@ unsigned long B7 = 0;
 /*******************/
 long Press = 0;
 long Temp = 0;
+/*************/
+uint8_t dma_rx_buffer[22]; // Buffer for calibration data
+uint8_t dma_tx_buffer[1];  // Buffer for write commands
+volatile uint8_t dma_read_complete = 0; // Flag to indicate DMA read completion
+volatile uint8_t dma_write_complete = 0; // Flag to indicate DMA write completion
 
 #define atmPress 101325 //Pa
 
 
 
-void read_calliberation_data (void)
-{
-	uint8_t Callib_Data[22] = {0};
-	uint16_t Callib_Start = 0xAA;
-	HAL_I2C_Mem_Read(BMP180_I2C, BMP180_ADDRESS, Callib_Start, 1, Callib_Data,22, HAL_MAX_DELAY);
-
-	AC1 = ((Callib_Data[0] << 8) | Callib_Data[1]);
-	AC2 = ((Callib_Data[2] << 8) | Callib_Data[3]);
-	AC3 = ((Callib_Data[4] << 8) | Callib_Data[5]);
-	AC4 = ((Callib_Data[6] << 8) | Callib_Data[7]);
-	AC5 = ((Callib_Data[8] << 8) | Callib_Data[9]);
-	AC6 = ((Callib_Data[10] << 8) | Callib_Data[11]);
-	B1 = ((Callib_Data[12] << 8) | Callib_Data[13]);
-	B2 = ((Callib_Data[14] << 8) | Callib_Data[15]);
-	MB = ((Callib_Data[16] << 8) | Callib_Data[17]);
-	MC = ((Callib_Data[18] << 8) | Callib_Data[19]);
-	MD = ((Callib_Data[20] << 8) | Callib_Data[21]);
-
+void read_calliberation_data(void) {
+    uint16_t Callib_Start = 0xAA;
+    dma_read_complete = 0; // Reset flag
+    HAL_I2C_Mem_Read_DMA(BMP180_I2C, BMP180_ADDRESS, Callib_Start, I2C_MEMADD_SIZE_8BIT, dma_rx_buffer, 22);
+    while (!dma_read_complete); // Wait for DMA completion
+    AC1 = ((dma_rx_buffer[0] << 8) | dma_rx_buffer[1]);
+    AC2 = ((dma_rx_buffer[2] << 8) | dma_rx_buffer[3]);
+    AC3 = ((dma_rx_buffer[4] << 8) | dma_rx_buffer[5]);
+    AC4 = ((dma_rx_buffer[6] << 8) | dma_rx_buffer[7]);
+    AC5 = ((dma_rx_buffer[8] << 8) | dma_rx_buffer[9]);
+    AC6 = ((dma_rx_buffer[10] << 8) | dma_rx_buffer[11]);
+    B1 = ((dma_rx_buffer[12] << 8) | dma_rx_buffer[13]);
+    B2 = ((dma_rx_buffer[14] << 8) | dma_rx_buffer[15]);
+    MB = ((dma_rx_buffer[16] << 8) | dma_rx_buffer[17]);
+    MC = ((dma_rx_buffer[18] << 8) | dma_rx_buffer[19]);
+    MD = ((dma_rx_buffer[20] << 8) | dma_rx_buffer[21]);
 }
 
 
 // Get uncompensated Temp
-uint16_t Get_UTemp (void)
-{
-	uint8_t datatowrite = 0x2E;
-	uint8_t Temp_RAW[2] = {0};
-	HAL_I2C_Mem_Write(BMP180_I2C, BMP180_ADDRESS, 0xF4, 1, &datatowrite, 1, 1000);
-	HAL_Delay (5);  // wait 4.5 ms
-	HAL_I2C_Mem_Read(BMP180_I2C, BMP180_ADDRESS, 0xF6, 1, Temp_RAW, 2, 1000);
-	return ((Temp_RAW[0]<<8) + Temp_RAW[1]);
+uint16_t Get_UTemp(void) {
+    uint8_t datatowrite = 0x2E;
+    uint8_t Temp_RAW[2] = {0};
+    dma_write_complete = 0; // Reset flag
+    HAL_I2C_Mem_Write_DMA(BMP180_I2C, BMP180_ADDRESS, 0xF4, I2C_MEMADD_SIZE_8BIT, &datatowrite, 1);
+    while (!dma_write_complete); // Wait for DMA completion
+    HAL_Delay(5); // Wait 4.5 ms
+    dma_read_complete = 0; // Reset flag
+    HAL_I2C_Mem_Read_DMA(BMP180_I2C, BMP180_ADDRESS, 0xF6, I2C_MEMADD_SIZE_8BIT, Temp_RAW, 2);
+    while (!dma_read_complete); // Wait for DMA completion
+    return ((Temp_RAW[0] << 8) + Temp_RAW[1]);
 }
 
 float BMP180_GetTemp (void)
@@ -104,28 +110,22 @@ float BMP180_GetTemp (void)
 }
 
 // Get uncompensated Pressure
-uint32_t Get_UPress (int oss)   // oversampling setting 0,1,2,3
-{
-	uint8_t datatowrite = 0x34+(oss<<6);
-	uint8_t Press_RAW[3] = {0};
-	HAL_I2C_Mem_Write(BMP180_I2C, BMP180_ADDRESS, 0xF4, 1, &datatowrite, 1, 1000);
-	switch (oss)
-	{
-		case (0):
-			HAL_Delay (5);
-			break;
-		case (1):
-			HAL_Delay (8);
-			break;
-		case (2):
-			HAL_Delay (14);
-			break;
-		case (3):
-			HAL_Delay (26);
-			break;
-	}
-	HAL_I2C_Mem_Read(BMP180_I2C, BMP180_ADDRESS, 0xF6, 1, Press_RAW, 3, 1000);
-	return (((Press_RAW[0]<<16)+(Press_RAW[1]<<8)+Press_RAW[2]) >> (8-oss));
+uint32_t Get_UPress(int oss) {
+    uint8_t datatowrite = 0x34 + (oss << 6);
+    uint8_t Press_RAW[3] = {0};
+    dma_write_complete = 0; // Reset flag
+    HAL_I2C_Mem_Write_DMA(BMP180_I2C, BMP180_ADDRESS, 0xF4, I2C_MEMADD_SIZE_8BIT, &datatowrite, 1);
+    while (!dma_write_complete); // Wait for DMA completion
+    switch (oss) {
+        case (0): HAL_Delay(5); break;
+        case (1): HAL_Delay(8); break;
+        case (2): HAL_Delay(14); break;
+        case (3): HAL_Delay(26); break;
+    }
+    dma_read_complete = 0; // Reset flag
+    HAL_I2C_Mem_Read_DMA(BMP180_I2C, BMP180_ADDRESS, 0xF6, I2C_MEMADD_SIZE_8BIT, Press_RAW, 3);
+    while (!dma_read_complete); // Wait for DMA completion
+    return (((Press_RAW[0] << 16) + (Press_RAW[1] << 8) + Press_RAW[2]) >> (8 - oss));
 }
 
 
@@ -165,5 +165,16 @@ float BMP180_GetAlt (int oss)
 void BMP180_Start (void)
 {
 	read_calliberation_data();
+}
+void HAL_I2C_MemRxCpltCallback(I2C_HandleTypeDef *hi2c) {
+    if (hi2c->Instance == I2C1) {
+        dma_read_complete = 1; // Set flag for read completion
+    }
+}
+
+void HAL_I2C_MemTxCpltCallback(I2C_HandleTypeDef *hi2c) {
+    if (hi2c->Instance == I2C1) {
+        dma_write_complete = 1; // Set flag for write completion
+    }
 }
 

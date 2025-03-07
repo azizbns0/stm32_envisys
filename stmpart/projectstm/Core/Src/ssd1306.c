@@ -30,6 +30,7 @@ extern I2C_HandleTypeDef hi2c1;
 
 /* SSD1306 data buffer */
 static uint8_t SSD1306_Buffer[SSD1306_WIDTH * SSD1306_HEIGHT / 8];
+volatile uint8_t dma_tx_complete = 0; // Flag to indicate DMA transfer completion
 
 /* Private SSD1306 structure */
 typedef struct {
@@ -629,18 +630,27 @@ void ssd1306_I2C_Init() {
 }
 
 void ssd1306_I2C_WriteMulti(uint8_t address, uint8_t reg, uint8_t* data, uint16_t count) {
-uint8_t dt[256];
-dt[0] = reg;
-uint8_t i;
-for(i = 0; i < count; i++)
-dt[i+1] = data[i];
-HAL_I2C_Master_Transmit(&hi2c1, address, dt, count+1, 10);
+    uint8_t dt[256];
+    dt[0] = reg;
+    for (uint8_t i = 0; i < count; i++) {
+        dt[i + 1] = data[i];
+    }
+    dma_tx_complete = 0; // Reset flag
+    HAL_I2C_Master_Transmit_DMA(&hi2c1, address, dt, count + 1);
+    while (!dma_tx_complete); // Wait for DMA completion
 }
 
 
 void ssd1306_I2C_Write(uint8_t address, uint8_t reg, uint8_t data) {
-	uint8_t dt[2];
-	dt[0] = reg;
-	dt[1] = data;
-	HAL_I2C_Master_Transmit(&hi2c1, address, dt, 2, 10);
+    uint8_t dt[2];
+    dt[0] = reg;
+    dt[1] = data;
+    dma_tx_complete = 0; // Reset flag
+    HAL_I2C_Master_Transmit_DMA(&hi2c1, address, dt, 2);
+    while (!dma_tx_complete); // Wait for DMA completion
+}
+void HAL_I2C_MasterTxCpltCallback(I2C_HandleTypeDef *hi2c) {
+    if (hi2c->Instance == I2C1) {
+        dma_tx_complete = 1; // Set flag for DMA completion
+    }
 }

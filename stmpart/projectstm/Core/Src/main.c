@@ -45,18 +45,44 @@
 
 /* Private variables ---------------------------------------------------------*/
 I2C_HandleTypeDef hi2c1;
+DMA_HandleTypeDef hdma_i2c1_rx;
+DMA_HandleTypeDef hdma_i2c1_tx;
+
+TIM_HandleTypeDef htim2;
 
 UART_HandleTypeDef huart3;
+DMA_HandleTypeDef hdma_usart3_tx;
 
 /* USER CODE BEGIN PV */
+volatile uint8_t read_sensor_flag = 0; // Flag to trigger sensor read
+volatile uint8_t update_display_flag = 0; // Flag to trigger display update
+volatile uint16_t timer_counter = 0; // Counter for timing tasks
+// Timer interrupt callback
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
+    if (htim->Instance == TIM2) {
+        timer_counter++;
+
+        // Schedule sensor read every 100 ms
+        if (timer_counter % 100 == 0) {
+            read_sensor_flag = 1;
+        }
+
+        // Schedule display update every 500 ms
+        if (timer_counter % 500 == 0) {
+            update_display_flag = 1;
+        }
+    }
+}
 
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_DMA_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_USART3_UART_Init(void);
+static void MX_TIM2_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -102,9 +128,12 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_I2C1_Init();
   MX_USART3_UART_Init();
+  MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
+  HAL_TIM_Base_Start_IT(&htim2);
 
   BMP180_Start();
 
@@ -125,60 +154,75 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  while (1)
-  {
-    /* USER CODE END WHILE */
+  while (1) {
+      /* USER CODE END WHILE */
 
-    /* USER CODE BEGIN 3 */
+      /* USER CODE BEGIN 3 */
 
-	  Temperature = BMP180_GetTemp();
+      // Check if sensor read is scheduled
+      if (read_sensor_flag) {
+          read_sensor_flag = 0; // Reset flag
 
-	  Pressure = BMP180_GetPress (0);
+          // Read sensor data
+          Temperature = BMP180_GetTemp();
+          Pressure = BMP180_GetPress(0);
+          Altitude = BMP180_GetAlt(0);
 
-	  Altitude = BMP180_GetAlt(0);
-	  char buffer[100];
-	  sprintf(buffer, "Temperature: %.2f C, Pressure: %.2f Pa, Altitude: %.2f m\n\r", Temperature, Pressure, Altitude);
-	  HAL_UART_Transmit(&huart3, (uint8_t*)buffer, strlen(buffer), HAL_MAX_DELAY);
-/***********To display on OLED**************/
+          // Send data over UART using DMA
+          char buffer[100];
+          sprintf(buffer, "Temperature: %.2f C, Pressure: %.2f Pa, Altitude: %.2f m\n\r", Temperature, Pressure, Altitude);
+          HAL_UART_Transmit_DMA(&huart3, (uint8_t*)buffer, strlen(buffer));
+      }
 
-	  SSD1306_GotoXY (35,0);
-	  SSD1306_Puts ("BMP180", &Font_11x18, 1);
-	  SSD1306_GotoXY (0,0);
-	  SSD1306_Puts ("Temperature", &Font_11x18, 1);
-	  SSD1306_GotoXY (20,40);
-	  sprintf(Temperature1, "%.2f", Temperature);
-	  SSD1306_Puts(Temperature1, &Font_11x18, 1);
-	  SSD1306_DrawCircle(80, 40, 2, 1);  //To print degree only
-	  SSD1306_GotoXY (85,40);  //To print celcius
-	  SSD1306_Puts ("C", &Font_11x18, 1);
-	  SSD1306_UpdateScreen(); //display
-	  HAL_Delay(2000);
-	  SSD1306_Clear();
+      // Check if display update is scheduled
+      if (update_display_flag) {
+          update_display_flag = 0; // Reset flag
 
+          // Cycle through display screens (Temperature, Pressure, Altitude)
+          static uint8_t display_state = 0;
+          switch (display_state) {
+              case 0: // Temperature
+                  SSD1306_GotoXY(35, 0);
+                  SSD1306_Puts("BMP180", &Font_11x18, 1);
+                  SSD1306_GotoXY(0, 0);
+                  SSD1306_Puts("Temperature", &Font_11x18, 1);
+                  SSD1306_GotoXY(20, 40);
+                  sprintf(Temperature1, "%.2f", Temperature);
+                  SSD1306_Puts(Temperature1, &Font_11x18, 1);
+                  SSD1306_DrawCircle(80, 40, 2, 1);
+                  SSD1306_GotoXY(85, 40);
+                  SSD1306_Puts("C", &Font_11x18, 1);
+                  SSD1306_UpdateScreen();
+                  display_state = 1;
+                  break;
 
-	  SSD1306_GotoXY (20,0);
-	  SSD1306_Puts ("Pressure", &Font_11x18, 1);
-	  SSD1306_GotoXY (10,40);
-	  sprintf(Pressure1, "%.2f", Pressure);
-	  SSD1306_Puts(Pressure1, &Font_11x18, 1);
-	  SSD1306_GotoXY (100,40);
-	  SSD1306_Puts ("pa", &Font_11x18, 1);
-	  SSD1306_UpdateScreen(); //display
-	  HAL_Delay(2000);
-	  SSD1306_Clear();
+              case 1: // Pressure
+                  SSD1306_Clear();
+                  SSD1306_GotoXY(20, 0);
+                  SSD1306_Puts("Pressure", &Font_11x18, 1);
+                  SSD1306_GotoXY(10, 40);
+                  sprintf(Pressure1, "%.2f", Pressure);
+                  SSD1306_Puts(Pressure1, &Font_11x18, 1);
+                  SSD1306_GotoXY(100, 40);
+                  SSD1306_Puts("Pa", &Font_11x18, 1);
+                  SSD1306_UpdateScreen();
+                  display_state = 2;
+                  break;
 
-	  SSD1306_GotoXY (20,0);
-	  SSD1306_Puts ("Altitude", &Font_11x18, 1);
-	  SSD1306_GotoXY (15,40);
-	  sprintf(Altitude1, "%.2f", Altitude);
-	  SSD1306_Puts(Altitude1, &Font_11x18, 1);
-	  SSD1306_GotoXY (90,40);
-	  SSD1306_Puts ("m", &Font_11x18, 1);
-	  SSD1306_UpdateScreen(); //display
-	  HAL_Delay(2000);
-	  SSD1306_Clear();
-
-	  HAL_Delay (2000);
+              case 2: // Altitude
+                  SSD1306_Clear();
+                  SSD1306_GotoXY(20, 0);
+                  SSD1306_Puts("Altitude", &Font_11x18, 1);
+                  SSD1306_GotoXY(15, 40);
+                  sprintf(Altitude1, "%.2f", Altitude);
+                  SSD1306_Puts(Altitude1, &Font_11x18, 1);
+                  SSD1306_GotoXY(90, 40);
+                  SSD1306_Puts("m", &Font_11x18, 1);
+                  SSD1306_UpdateScreen();
+                  display_state = 0;
+                  break;
+          }
+      }
   }
   /* USER CODE END 3 */
 }
@@ -260,6 +304,51 @@ static void MX_I2C1_Init(void)
 }
 
 /**
+  * @brief TIM2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM2_Init(void)
+{
+
+  /* USER CODE BEGIN TIM2_Init 0 */
+
+  /* USER CODE END TIM2_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM2_Init 1 */
+
+  /* USER CODE END TIM2_Init 1 */
+  htim2.Instance = TIM2;
+  htim2.Init.Prescaler = 83999;
+  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim2.Init.Period = 99;
+  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM2_Init 2 */
+
+  /* USER CODE END TIM2_Init 2 */
+
+}
+
+/**
   * @brief USART3 Initialization Function
   * @param None
   * @retval None
@@ -289,6 +378,28 @@ static void MX_USART3_UART_Init(void)
   /* USER CODE BEGIN USART3_Init 2 */
 
   /* USER CODE END USART3_Init 2 */
+
+}
+
+/**
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void)
+{
+
+  /* DMA controller clock enable */
+  __HAL_RCC_DMA1_CLK_ENABLE();
+
+  /* DMA interrupt init */
+  /* DMA1_Stream0_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Stream0_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Stream0_IRQn);
+  /* DMA1_Stream3_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Stream3_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Stream3_IRQn);
+  /* DMA1_Stream6_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Stream6_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Stream6_IRQn);
 
 }
 

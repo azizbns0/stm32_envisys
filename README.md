@@ -38,10 +38,7 @@ A real-time embedded system for monitoring environmental data (temperature, pres
 | SSD1306 OLED          | I2C1 (SCL: PB6, SDA: PB7)    | 0.96" OLED display             |
 | USB-UART Converter    | USART3 (TX: PD8, RX: PD9)    | For serial debugging           |
 
-![Wiring Diagram](./assets/wiring_diagram.png)  
-*Replace with your actual wiring diagram (e.g., [Fritzing](https://fritzing.org/) or [draw.io](https://app.diagrams.net/)).*
 
----
 
 ## Setup
 

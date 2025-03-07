@@ -1,22 +1,57 @@
-# Environmental Monitoring System (stm32_project1)
+# STM32 Environmental Monitoring System
 
-## Project Description
-The Environmental Monitoring System utilizes a BMP180 sensor to measure temperature, pressure, and altitude, displaying real-time data on an OLED screen using an STM32 microcontroller. The project also includes UART communication to transmit data to an ESP32 for additional functionalities, such as cloud connectivity or remote monitoring.
+[![License](https://img.shields.io/badge/License-SLA0044-blue.svg)](https://www.st.com/SLA0044)
+[![Platform](https://img.shields.io/badge/Platform-STM32F4-blue)](https://www.st.com/en/microcontrollers-microprocessors/stm32f4-series.html)
+
+A real-time embedded system for monitoring environmental data (temperature, pressure, altitude) using the **BMP180 sensor** and displaying results on an **SSD1306 OLED**. Built with STM32CubeIDE and HAL libraries.
+
+---
+
+## Table of Contents
+- [Features](#features)
+- [Hardware Components](#hardware-components)
+- [Setup](#setup)
+- [Configuration](#configuration)
+- [Workflow](#workflow)
+- [Current Limitations](#current-limitations)
+- [License](#license)
+- [Acknowledgments](#acknowledgments)
+
+---
 
 ## Features
-- **Real-time Environmental Data**: Continuously captures temperature, pressure, and altitude readings.
-- **OLED Display**: Presents sensor data in a user-friendly format.
-- **UART Communication**: Sends data to an ESP32 for further processing and potential web integration.
-- **Modular Design**: Easily extendable to accommodate additional sensors or features.
+- **Non-blocking operation**: Uses DMA and timer interrupts for efficient task scheduling.
+- **Real-time data**: 
+  - Temperature (°C)
+  - Pressure (Pa)
+  - Altitude (m)
+- **OLED Display**: Cyclic display of data on SSD1306 (128x64 pixels).
+- **UART Debugging**: Data transmission via USART3 (9600 baud).
 
-## Hardware Requirements
-- STM32F407 Microcontroller
-- BMP180 Barometric Sensor
-- SSD1306 OLED Display
-- ESP32 (optional for future enhancements)
-- Jumper wires and breadboard for connections
+---
 
-## Software Requirements
+## Hardware Components
+| Component             | Connection                   | Description                     |
+|-----------------------|------------------------------|---------------------------------|
+| STM32F4 Discovery     | -                            | Main microcontroller           |
+| BMP180 Sensor         | I2C1 (SCL: PB6, SDA: PB7)    | Barometric pressure sensor     |
+| SSD1306 OLED          | I2C1 (SCL: PB6, SDA: PB7)    | 0.96" OLED display             |
+| USB-UART Converter    | USART3 (TX: PD8, RX: PD9)    | For serial debugging           |
+
+![Wiring Diagram](./assets/wiring_diagram.png)  
+*Replace with your actual wiring diagram (e.g., [Fritzing](https://fritzing.org/) or [draw.io](https://app.diagrams.net/)).*
+
+---
+
+## Setup
+
+### Prerequisites
 - STM32CubeIDE
-- HAL library for STM32
-- C programming language
+- STM32F4 Discovery Board
+- BMP180 and SSD1306 modules
+- USB-UART converter (e.g., FTDI)
+
+### Installation
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/azizbns0/stm32_project1.git

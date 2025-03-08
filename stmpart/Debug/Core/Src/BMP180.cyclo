@@ -1,7 +1,0 @@
-BMP180.c:64:6:read_calliberation_data	1
-BMP180.c:86:10:Get_UTemp	1
-BMP180.c:96:7:BMP180_GetTemp	1
-BMP180.c:107:10:Get_UPress	5
-BMP180.c:132:7:BMP180_GetPress	3
-BMP180.c:159:7:BMP180_GetAlt	1
-BMP180.c:165:6:BMP180_Start	1
